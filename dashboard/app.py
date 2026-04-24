@@ -134,197 +134,13 @@ tabs = st.tabs([
 
 
 # ----------------------------------------------------------------------------
-# 0 · Overview
+# NOTE: the Overview tab (tabs[0]) is rendered at the END of this script, not
+# here. All the other tabs mutate `scen` as their widgets run (e.g. the police
+# workforce slider on tabs[2] writes back into scen.police). Streamlit runs
+# script blocks top-to-bottom on every rerun, so if Overview ran first it
+# would see the scen values from the PREVIOUS interaction. Deferring Overview
+# to the bottom of the file guarantees it computes with the latest inputs.
 # ----------------------------------------------------------------------------
-with tabs[0]:
-    result, rdel, cdel, totals = run_current()
-
-    # ------- Envelope builder: SR25 published + SR27 extrapolation ------------
-    env_nom_published = (result.sr25_envelope_nominal.copy()
-                         if result.sr25_envelope_nominal is not None
-                         else pd.DataFrame(columns=["RDEL", "CDEL"]))
-    env_real_published = real_from_nominal(env_nom_published, result.deflator).reindex(
-        columns=["RDEL", "CDEL"]
-    )
-
-    # Default SR27 real growth = observed SR25 CAGR on total envelope (2025-26 → 2028-29).
-    if {"2025-26", "2028-29"}.issubset(env_real_published.index):
-        total_start = env_real_published.loc["2025-26"].sum()
-        total_end = env_real_published.loc["2028-29"].sum()
-        n_years = int("2028-29"[:4]) - int("2025-26"[:4])  # 3
-        sr25_cagr = (total_end / total_start) ** (1 / n_years) - 1
-    else:
-        sr25_cagr = 0.0
-    default_sr27 = round(sr25_cagr / 0.0025) * 0.0025  # snap to slider step
-
-    st.markdown(
-        "**Budget envelope — SR25 years published; SR27 years extrapolated.** "
-        f"SR25 implied real growth on total DEL was **{sr25_cagr * 100:+.2f}% p.a.** "
-        "(used as the default below)."
-    )
-    sr27_real_growth = pct_slider(
-        "SR27 real growth on overall budget p.a. (applied to both RDEL and CDEL from 2028-29)",
-        -0.03, 0.04, float(default_sr27), 0.0025, key="o_sr27g",
-    )
-
-    env_real = env_real_published.copy()
-    if "2028-29" in env_real.index:
-        anchor = env_real.loc["2028-29"]
-        for i, yr in enumerate(["2029-30", "2030-31"], start=1):
-            env_real.loc[yr] = anchor * (1 + sr27_real_growth) ** i
-    env_real = env_real.loc[PROJECTION_YEARS]
-    env_nom = nominal_from_real(env_real, result.deflator)
-    env = env_real if use_real else env_nom
-    env["Total DEL"] = env["RDEL"] + env["CDEL"]
-
-    # Forecast totals over projection years
-    fc = totals.loc[PROJECTION_YEARS, ["RDEL", "CDEL", "Total DEL"]]
-    gap = fc - env
-
-    # ------- Headline KPIs: forecast vs envelope ------------------------------
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric(
-        "2025-26 Total DEL (model)",
-        f"£{fc.loc['2025-26', 'Total DEL']:,.0f}m",
-        delta=f"£{gap.loc['2025-26', 'Total DEL']:+,.0f}m vs envelope",
-        delta_color="inverse",
-    )
-    c2.metric(
-        "2028-29 (end SR25)",
-        f"£{fc.loc['2028-29', 'Total DEL']:,.0f}m",
-        delta=f"£{gap.loc['2028-29', 'Total DEL']:+,.0f}m vs envelope",
-        delta_color="inverse",
-    )
-    c3.metric(
-        "2030-31 (end SR27)",
-        f"£{fc.loc['2030-31', 'Total DEL']:,.0f}m",
-        delta=f"£{gap.loc['2030-31', 'Total DEL']:+,.0f}m vs envelope",
-        delta_color="inverse",
-    )
-    c4.metric(
-        "Cumulative gap 2025-26 → 2030-31",
-        f"£{gap['Total DEL'].sum():+,.0f}m",
-        help="Positive = model spend exceeds envelope.",
-    )
-
-    # ------- Forecast vs envelope chart ---------------------------------------
-    st.subheader(f"Model forecast vs HO budget envelope ({unit})")
-
-    fig_env = go.Figure()
-    # RDEL: envelope solid, forecast dashed
-    fig_env.add_trace(go.Scatter(
-        x=env.index, y=env["RDEL"], name="RDEL — envelope",
-        mode="lines+markers", line=dict(width=3, color="#1f77b4"),
-    ))
-    fig_env.add_trace(go.Scatter(
-        x=fc.index, y=fc["RDEL"], name="RDEL — model",
-        mode="lines+markers", line=dict(width=3, color="#1f77b4", dash="dash"),
-    ))
-    # CDEL: envelope solid, forecast dashed
-    fig_env.add_trace(go.Scatter(
-        x=env.index, y=env["CDEL"], name="CDEL — envelope",
-        mode="lines+markers", line=dict(width=3, color="#e76f51"),
-    ))
-    fig_env.add_trace(go.Scatter(
-        x=fc.index, y=fc["CDEL"], name="CDEL — model",
-        mode="lines+markers", line=dict(width=3, color="#e76f51", dash="dash"),
-    ))
-    fig_env.add_vrect(
-        x0="2028-29", x1="2030-31",
-        fillcolor="#888", opacity=0.07, line_width=0,
-        annotation_text="SR27 (extrapolated)", annotation_position="top right",
-    )
-    fig_env.update_layout(
-        height=420, hovermode="x unified",
-        yaxis_title=unit, legend_title=None,
-        title="Envelope (solid) vs model (dashed). Positive gap = model exceeds envelope.",
-    )
-    st.plotly_chart(fig_env, width=W)
-
-    # ------- Gap bar chart ----------------------------------------------------
-    fig_gap = go.Figure()
-    fig_gap.add_trace(go.Bar(
-        x=gap.index, y=gap["RDEL"], name="RDEL gap",
-        marker_color=["#e76f51" if v > 0 else "#2a9d8f" for v in gap["RDEL"]],
-    ))
-    fig_gap.add_trace(go.Bar(
-        x=gap.index, y=gap["CDEL"], name="CDEL gap",
-        marker_color=["#f4a261" if v > 0 else "#8dbfa5" for v in gap["CDEL"]],
-    ))
-    fig_gap.add_hline(y=0, line_color="black", line_width=1)
-    fig_gap.update_layout(
-        barmode="relative", height=300, hovermode="x unified",
-        yaxis_title=f"Gap ({unit})", legend_title=None,
-        title="Model − envelope gap by year (red = overspend, green = headroom)",
-    )
-    st.plotly_chart(fig_gap, width=W)
-
-    # ------- Summary table ----------------------------------------------------
-    summary = pd.DataFrame({
-        "Envelope RDEL": env["RDEL"],
-        "Model RDEL": fc["RDEL"],
-        "Gap RDEL": gap["RDEL"],
-        "Envelope CDEL": env["CDEL"],
-        "Model CDEL": fc["CDEL"],
-        "Gap CDEL": gap["CDEL"],
-        "Gap Total": gap["Total DEL"],
-    })
-    st.dataframe(summary.style.format("{:,.0f}"), width=W)
-
-    # ------- Continuity diagnostic --------------------------------------------
-    st.subheader("Historic → projection continuity check")
-    hist_year, proj_year = "2024-25", "2025-26"
-    step_rdel = (rdel.loc[proj_year] / rdel.loc[hist_year].replace(0, pd.NA) - 1) * 100
-    step_cdel = (cdel.loc[proj_year] / cdel.loc[hist_year].replace(0, pd.NA) - 1) * 100
-    cont = pd.DataFrame({
-        f"RDEL {hist_year}": rdel.loc[hist_year],
-        f"RDEL {proj_year}": rdel.loc[proj_year],
-        "RDEL Δ%": step_rdel,
-        f"CDEL {hist_year}": cdel.loc[hist_year],
-        f"CDEL {proj_year}": cdel.loc[proj_year],
-        "CDEL Δ%": step_cdel,
-    })
-    THRESHOLD = 5.0
-
-    def flag_style(v):
-        try:
-            if abs(float(v)) > THRESHOLD:
-                return "background-color: #fde7e1"
-        except (TypeError, ValueError):
-            pass
-        return ""
-
-    styled = (
-        cont.style
-        .format({
-            f"RDEL {hist_year}": "{:,.0f}", f"RDEL {proj_year}": "{:,.0f}",
-            f"CDEL {hist_year}": "{:,.0f}", f"CDEL {proj_year}": "{:,.0f}",
-            "RDEL Δ%": "{:+.1f}%", "CDEL Δ%": "{:+.1f}%",
-        })
-        .map(flag_style, subset=["RDEL Δ%", "CDEL Δ%"])
-    )
-    st.caption(
-        f"Step change from {hist_year} outturn to {proj_year} model forecast. "
-        f"Cells highlighted red when |Δ| > {THRESHOLD:.0f}%."
-    )
-    st.dataframe(styled, width=W)
-
-    # ------- Existing RDEL by programme area ----------------------------------
-    st.subheader(f"RDEL by programme area ({unit})")
-    fig = px.area(rdel, x=rdel.index, y=rdel.columns,
-                  labels={"x": "Year", "value": unit, "variable": "Area"})
-    fig.add_vline(x=len(HISTORIC_YEARS) - 0.5, line_dash="dash", line_color="black",
-                  annotation_text="historic → projection", annotation_position="top")
-    fig.add_vline(x=len(HISTORIC_YEARS) + len(SR25_YEARS) - 0.5,
-                  line_dash="dot", line_color="black",
-                  annotation_text="SR25 → SR27", annotation_position="top")
-    fig.update_layout(height=480, hovermode="x unified", legend_title=None)
-    st.plotly_chart(fig, width=W)
-
-    with st.expander("Full RDEL table"):
-        st.dataframe(rdel.style.format("{:,.0f}"), width=W)
-    with st.expander("Full CDEL table"):
-        st.dataframe(cdel.style.format("{:,.0f}"), width=W)
 
 
 # ----------------------------------------------------------------------------
@@ -1280,3 +1096,196 @@ with tabs[10]:
     st.download_button(f"Totals ({unit}) CSV",
                        totals.to_csv().encode("utf-8"),
                        f"home_office_{name}_totals.csv", "text/csv")
+
+
+# ----------------------------------------------------------------------------
+# 0 · Overview (rendered last so that every other tab's widget mutations of
+#     `scen` have already run before we compute the projection here).
+# ----------------------------------------------------------------------------
+with tabs[0]:
+    result, rdel, cdel, totals = run_current()
+
+    # ------- Envelope builder: SR25 published + SR27 extrapolation ------------
+    env_nom_published = (result.sr25_envelope_nominal.copy()
+                         if result.sr25_envelope_nominal is not None
+                         else pd.DataFrame(columns=["RDEL", "CDEL"]))
+    env_real_published = real_from_nominal(env_nom_published, result.deflator).reindex(
+        columns=["RDEL", "CDEL"]
+    )
+
+    # Default SR27 real growth = observed SR25 CAGR on total envelope (2025-26 → 2028-29).
+    if {"2025-26", "2028-29"}.issubset(env_real_published.index):
+        total_start = env_real_published.loc["2025-26"].sum()
+        total_end = env_real_published.loc["2028-29"].sum()
+        n_years = int("2028-29"[:4]) - int("2025-26"[:4])  # 3
+        sr25_cagr = (total_end / total_start) ** (1 / n_years) - 1
+    else:
+        sr25_cagr = 0.0
+    default_sr27 = round(sr25_cagr / 0.0025) * 0.0025  # snap to slider step
+
+    st.markdown(
+        "**Budget envelope — SR25 years published; SR27 years extrapolated.** "
+        f"SR25 implied real growth on total DEL was **{sr25_cagr * 100:+.2f}% p.a.** "
+        "(used as the default below)."
+    )
+    sr27_real_growth = pct_slider(
+        "SR27 real growth on overall budget p.a. (applied to both RDEL and CDEL from 2028-29)",
+        -0.03, 0.04, float(default_sr27), 0.0025, key="o_sr27g",
+    )
+
+    env_real = env_real_published.copy()
+    if "2028-29" in env_real.index:
+        anchor = env_real.loc["2028-29"]
+        for i, yr in enumerate(["2029-30", "2030-31"], start=1):
+            env_real.loc[yr] = anchor * (1 + sr27_real_growth) ** i
+    env_real = env_real.loc[PROJECTION_YEARS]
+    env_nom = nominal_from_real(env_real, result.deflator)
+    env = env_real if use_real else env_nom
+    env["Total DEL"] = env["RDEL"] + env["CDEL"]
+
+    # Forecast totals over projection years
+    fc = totals.loc[PROJECTION_YEARS, ["RDEL", "CDEL", "Total DEL"]]
+    gap = fc - env
+
+    # ------- Headline KPIs: forecast vs envelope ------------------------------
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric(
+        "2025-26 Total DEL (model)",
+        f"£{fc.loc['2025-26', 'Total DEL']:,.0f}m",
+        delta=f"£{gap.loc['2025-26', 'Total DEL']:+,.0f}m vs envelope",
+        delta_color="inverse",
+    )
+    c2.metric(
+        "2028-29 (end SR25)",
+        f"£{fc.loc['2028-29', 'Total DEL']:,.0f}m",
+        delta=f"£{gap.loc['2028-29', 'Total DEL']:+,.0f}m vs envelope",
+        delta_color="inverse",
+    )
+    c3.metric(
+        "2030-31 (end SR27)",
+        f"£{fc.loc['2030-31', 'Total DEL']:,.0f}m",
+        delta=f"£{gap.loc['2030-31', 'Total DEL']:+,.0f}m vs envelope",
+        delta_color="inverse",
+    )
+    c4.metric(
+        "Cumulative gap 2025-26 → 2030-31",
+        f"£{gap['Total DEL'].sum():+,.0f}m",
+        help="Positive = model spend exceeds envelope.",
+    )
+
+    # ------- Forecast vs envelope chart ---------------------------------------
+    st.subheader(f"Model forecast vs HO budget envelope ({unit})")
+
+    fig_env = go.Figure()
+    fig_env.add_trace(go.Scatter(
+        x=env.index, y=env["RDEL"], name="RDEL — envelope",
+        mode="lines+markers", line=dict(width=3, color="#1f77b4"),
+    ))
+    fig_env.add_trace(go.Scatter(
+        x=fc.index, y=fc["RDEL"], name="RDEL — model",
+        mode="lines+markers", line=dict(width=3, color="#1f77b4", dash="dash"),
+    ))
+    fig_env.add_trace(go.Scatter(
+        x=env.index, y=env["CDEL"], name="CDEL — envelope",
+        mode="lines+markers", line=dict(width=3, color="#e76f51"),
+    ))
+    fig_env.add_trace(go.Scatter(
+        x=fc.index, y=fc["CDEL"], name="CDEL — model",
+        mode="lines+markers", line=dict(width=3, color="#e76f51", dash="dash"),
+    ))
+    fig_env.add_vrect(
+        x0="2028-29", x1="2030-31",
+        fillcolor="#888", opacity=0.07, line_width=0,
+        annotation_text="SR27 (extrapolated)", annotation_position="top right",
+    )
+    fig_env.update_layout(
+        height=420, hovermode="x unified",
+        yaxis_title=unit, legend_title=None,
+        title="Envelope (solid) vs model (dashed). Positive gap = model exceeds envelope.",
+    )
+    st.plotly_chart(fig_env, width=W)
+
+    # ------- Gap bar chart ----------------------------------------------------
+    fig_gap = go.Figure()
+    fig_gap.add_trace(go.Bar(
+        x=gap.index, y=gap["RDEL"], name="RDEL gap",
+        marker_color=["#e76f51" if v > 0 else "#2a9d8f" for v in gap["RDEL"]],
+    ))
+    fig_gap.add_trace(go.Bar(
+        x=gap.index, y=gap["CDEL"], name="CDEL gap",
+        marker_color=["#f4a261" if v > 0 else "#8dbfa5" for v in gap["CDEL"]],
+    ))
+    fig_gap.add_hline(y=0, line_color="black", line_width=1)
+    fig_gap.update_layout(
+        barmode="relative", height=300, hovermode="x unified",
+        yaxis_title=f"Gap ({unit})", legend_title=None,
+        title="Model − envelope gap by year (red = overspend, green = headroom)",
+    )
+    st.plotly_chart(fig_gap, width=W)
+
+    # ------- Summary table ----------------------------------------------------
+    summary = pd.DataFrame({
+        "Envelope RDEL": env["RDEL"],
+        "Model RDEL": fc["RDEL"],
+        "Gap RDEL": gap["RDEL"],
+        "Envelope CDEL": env["CDEL"],
+        "Model CDEL": fc["CDEL"],
+        "Gap CDEL": gap["CDEL"],
+        "Gap Total": gap["Total DEL"],
+    })
+    st.dataframe(summary.style.format("{:,.0f}"), width=W)
+
+    # ------- Continuity diagnostic --------------------------------------------
+    st.subheader("Historic → projection continuity check")
+    hist_year, proj_year = "2024-25", "2025-26"
+    step_rdel = (rdel.loc[proj_year] / rdel.loc[hist_year].replace(0, pd.NA) - 1) * 100
+    step_cdel = (cdel.loc[proj_year] / cdel.loc[hist_year].replace(0, pd.NA) - 1) * 100
+    cont = pd.DataFrame({
+        f"RDEL {hist_year}": rdel.loc[hist_year],
+        f"RDEL {proj_year}": rdel.loc[proj_year],
+        "RDEL Δ%": step_rdel,
+        f"CDEL {hist_year}": cdel.loc[hist_year],
+        f"CDEL {proj_year}": cdel.loc[proj_year],
+        "CDEL Δ%": step_cdel,
+    })
+    THRESHOLD = 5.0
+
+    def flag_style(v):
+        try:
+            if abs(float(v)) > THRESHOLD:
+                return "background-color: #fde7e1"
+        except (TypeError, ValueError):
+            pass
+        return ""
+
+    styled = (
+        cont.style
+        .format({
+            f"RDEL {hist_year}": "{:,.0f}", f"RDEL {proj_year}": "{:,.0f}",
+            f"CDEL {hist_year}": "{:,.0f}", f"CDEL {proj_year}": "{:,.0f}",
+            "RDEL Δ%": "{:+.1f}%", "CDEL Δ%": "{:+.1f}%",
+        })
+        .map(flag_style, subset=["RDEL Δ%", "CDEL Δ%"])
+    )
+    st.caption(
+        f"Step change from {hist_year} outturn to {proj_year} model forecast. "
+        f"Cells highlighted red when |Δ| > {THRESHOLD:.0f}%."
+    )
+    st.dataframe(styled, width=W)
+
+    # ------- RDEL by programme area -------------------------------------------
+    st.subheader(f"RDEL by programme area ({unit})")
+    fig = px.area(rdel, x=rdel.index, y=rdel.columns,
+                  labels={"x": "Year", "value": unit, "variable": "Area"})
+    fig.add_vline(x=len(HISTORIC_YEARS) - 0.5, line_dash="dash", line_color="black",
+                  annotation_text="historic → projection", annotation_position="top")
+    fig.add_vline(x=len(HISTORIC_YEARS) + len(SR25_YEARS) - 0.5,
+                  line_dash="dot", line_color="black",
+                  annotation_text="SR25 → SR27", annotation_position="top")
+    fig.update_layout(height=480, hovermode="x unified", legend_title=None)
+    st.plotly_chart(fig, width=W)
+
+    with st.expander("Full RDEL table"):
+        st.dataframe(rdel.style.format("{:,.0f}"), width=W)
+    with st.expander("Full CDEL table"):
+        st.dataframe(cdel.style.format("{:,.0f}"), width=W)
