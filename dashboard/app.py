@@ -75,9 +75,10 @@ preset_map = {
 
 # Rebuild scenario whenever the preset changes. Also clear all widget-state
 # keys so that sliders/number-inputs re-read their defaults from the new
-# scenario. Without this, Streamlit restores each widget's previous value
-# from session_state and writes it straight back into `scen`, silently
-# undoing the preset switch.
+# scenario, then force a rerun so widgets initialise cleanly from `value=`
+# on the next pass. Without the rerun, widgets that have already rendered
+# this pass keep their old displayed values even though session_state was
+# cleared.
 PRESERVE_KEYS = {"_preset", "scen"}
 if st.session_state.get("_preset") != preset:
     for key in list(st.session_state.keys()):
@@ -85,6 +86,7 @@ if st.session_state.get("_preset") != preset:
             del st.session_state[key]
     st.session_state["_preset"] = preset
     st.session_state["scen"] = preset_map[preset]
+    st.rerun()
 
 scen: Scenario = st.session_state["scen"]
 
