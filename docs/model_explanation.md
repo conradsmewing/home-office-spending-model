@@ -1,6 +1,6 @@
 # Home Office spending model — plain English explanation
 
-This document describes what the model does, where its numbers come from, and how the projection logic works. It is written for a reader who wants to understand the model without reading the code.
+This document describes what the model does, where its numbers come from, and how the projection logic works. It is written for a reader who wants to understand the model without reading the code. A companion document, [`dashboard_user_guide.md`](dashboard_user_guide.md), explains how to drive the interactive dashboard.
 
 ---
 
@@ -9,138 +9,201 @@ This document describes what the model does, where its numbers come from, and ho
 The model produces a year-by-year picture of Home Office departmental spending — both the Resource budget (RDEL: day-to-day running costs) and the Capital budget (CDEL: investment) — split into seven programme areas. It covers:
 
 - A **historic** period from 2020-21 to 2024-25, using published outturn data.
-- A **SR25 projection period** from 2025-26 to 2028-29, reflecting the June 2025 Spending Review envelope.
-- A **SR27 projection period** from 2029-30 to 2030-31, which is fully driver-projected because no SR27 envelope yet exists.
+- An **SR25 projection period** from 2025-26 to 2028-29, reflecting the June 2025 Spending Review envelope.
+- An **SR27 projection period** from 2029-30 to 2030-31, which is fully driver-projected because no SR27 envelope yet exists.
 
 All real-terms figures are expressed in **2025-26 prices** using the HMT GDP deflator.
+
+The model's core claim is that departmental spending is the sum of a small set of causal drivers (asylum supported population, police workforce, visa fee income, etc.) and that changes in those drivers have traceable budget consequences.
 
 ---
 
 ## 2. The seven programme areas
 
-The model splits the Home Office into seven areas, chosen because each has a distinct driver story:
-
 | Area | What it covers |
 |---|---|
-| Asylum & Protection | Asylum accommodation (hotels and dispersal), subsistence, processing, legal |
-| Borders & Migration | Border Force operations, UKVI gross costs less visa fee income |
+| Asylum & Protection | Asylum accommodation (hotels + dispersal), subsistence, casework, legal |
+| Borders & Migration | Border Force operations + UKVI gross costs net of visa fee income |
 | Border Security Command | New SR25 initiative tackling small-boats people-smuggling |
-| Police | Core police grant, counter-terrorism policing, NCA contribution |
+| Police | **HO Core Grant** — the residual the HO funds after precept and other local income |
 | Homeland Security | Counter-terrorism, intelligence, HMG security functions |
-| Crime, Fire & Drugs | Crime reduction, drug strategy, fire resilience |
+| Crime, Fire & Drugs | Crime reduction and drug strategy (fire & rescue was transferred to MHCLG in 2022) |
 | Corporate & Admin | Back-office, HR, digital, admin trajectory set by SR25 |
 
 ---
 
 ## 3. Where the numbers come from
 
-There are two main data inputs:
+Two primary sources:
 
-1. **PESA 2025 Chapter 1 (HMT)** — gives the total Home Office RDEL and CDEL envelope year-by-year from 2020-21 to 2029-30, on a consistent basis. The model extracts the "Home Office" row from four tables: resource DEL excl depreciation (historic and SR25 forward), and capital DEL (historic and forward).
+1. **PESA 2025 Chapter 1 (HMT)** — total Home Office RDEL and CDEL envelope from 2020-21 to 2029-30 on a consistent basis. The model reads four PESA tables (RDEL and CDEL, historic and SR25 plans) and extracts the Home Office row.
+2. **HMT GDP deflator (March 2026 QNA release)** — implicit price deflator for every financial year from 1955-56 through to 2030-31 (combining ONS outturn and OBR forecast). The model rebases to 2025-26 = 100.
 
-2. **HMT GDP deflator (March 2026 QNA release)** — gives the implicit price deflator for every financial year from 1955-56 to 2024-25 (ONS outturn) and forecasts to 2030-31 (OBR Spring Statement 2026). The model rebases this so that 2025-26 = 100 and uses it for every real/nominal conversion.
+PESA provides totals, not the splits between programme areas. The historic area splits are produced by applying a fixed share vector to each year's total (roughly: police 32%, borders 22%, homeland 18%, admin 18%, asylum 4%, crime/fire/drugs 4%, BSC 2%). These shares are editable in `parse_sources.py`; for analytical rigour they should be replaced with values from the HO Annual Report & Accounts or the Main Estimates Memorandum.
 
-PESA only tells us the total Home Office envelope, not the split between the seven programme areas. To produce a programme-level historic series the model applies a **share vector** (roughly: 19% asylum, 10% borders, 0.5% Border Security Command, 61% police, 4% homeland security, 3.5% crime/fire/drugs, 2.3% admin — shares sum to exactly 1.0). These shares are editable in `parse_sources.py` and should be replaced with authoritative figures once the HO Annual Report & Accounts PDF is parsed.
+The driver-level inputs (workforce sizes, pay rates, population stocks, unit costs) are indicative figures calibrated to match the historic 2024-25 outturn in each area, so the transition into the projection is continuous.
 
 ---
 
 ## 4. How the projection works
 
-For the historic period the model uses PESA directly. For the projection period it does something different: it builds each area up from a small set of drivers, lets you vary those drivers, and reports back the total.
+For the historic period the model uses PESA directly. For the projection period it builds each area up from drivers. All driver calculations happen in **real 2025-26 prices**; nominal figures are produced at the end by re-applying the deflator.
 
-### 4.1 Asylum & Protection
+### 4.1 Asylum & Protection — two-stock population + capacity-constrained accommodation
 
-The driver is:
+The supported population is modelled as two stocks:
 
-> supported population × (hotel share × hotel unit cost + dispersal share × dispersal unit cost) × 365 days + processing cost per case × cases processed per year
+- **Awaiting determination**: people who have arrived and whose initial asylum decision is pending.
+- **On appeal**: people who were refused at initial decision and have appealed.
 
-The default baseline uses ~106,000 people in support, 30% in hotels at £140/night, 70% in dispersal accommodation at £22/night, and processing at ~£13,500 per case. Population can grow or shrink year-on-year through a parameter.
+Each year the stocks evolve as:
 
-### 4.2 Police
+```
+awaiting[t+1]  = awaiting[t] + arrivals − withdrawals − initial decisions
+on_appeal[t+1] = on_appeal[t] + initial refusals − appeal decisions
+```
 
-> workforce (FTE) × average pay per FTE × on-costs multiplier + non-pay RDEL
+Failed-appeal cases are assumed to be deported quickly enough to leave support within the year, so they do not accumulate anywhere. Withdrawals are modelled as a fraction of the awaiting pool each year (people returning home, regularising status, or going missing).
 
-The on-costs multiplier captures pensions, NICs and overheads (default 1.25). Workforce and real pay awards can grow year-on-year. Non-pay RDEL is a single bucket for counter-terrorism, NCA, technology and grants.
+Decision throughput is a single caseworker pool of `total_decisions_capacity` (baseline 140k cases/year), split between initial and appeal work. The split defaults to `baseline_appeal_share` (29%) but **reallocates toward appeals** when the appeal pool exceeds `appeal_target_months` (default 12 months) of baseline appeal flow — ramping linearly up to `max_appeal_share` (50%). This captures the real behaviour whereby caseworker resource gets pulled into appeals when the backlog grows.
 
-### 4.3 Borders & Migration
+Accommodation cost is **capacity-constrained**: dispersed accommodation is filled first up to `dispersal_capacity` (default 75,000 persons), and any residual population sits in hotels. Marginal changes in the supported stock are therefore priced at the hotel nightly rate (default £140/night) until hotel use reaches zero, after which marginal changes are at the dispersal rate (default £22/night).
 
-> Border Force pay bill + Border Force non-pay (scaled by passenger volume) + (UKVI gross cost − visa fee income)
+Non-accommodation RDEL is a processing cost per case (default £13,500) applied to the total number of initial + appeal decisions.
 
-UKVI is substantially fee-funded, so the model represents it as a net figure: gross cost less fee income. Fee income can grow in real terms through a parameter.
+Baseline parameters are calibrated so the hotel population just reaches zero by the end of 2028-29.
 
-### 4.4 Border Security Command
+### 4.2 Police — HO Core Grant as the residual
 
-SR25 announced a phased uplift of £280m additional RDEL per year by 2028-29. The model takes a 2025-26 baseline, interpolates linearly to the 2028-29 peak, and holds flat in real terms through the SR27 period. The profile can be switched to "backloaded".
+The model computes gross England & Wales police spending as:
 
-### 4.5 Homeland Security and Crime/Fire/Drugs
+```
+Gross = Officer pay + Staff/PCSO pay + Non-pay
+```
 
-Each is a simple baseline (fixed at 2025-26 real prices) compounded year-on-year by a real growth rate. The defaults are 0% for homeland security and −1% for crime/fire/drugs.
+where officer pay = `workforce_fte × avg_pay × on-costs_multiplier`, staff pay is a separate bucket for PCSOs and police staff (~£2.6bn default), and non-pay covers estates, technology, transport, CT and NCA contributions (~£6.5bn default).
 
-### 4.6 Corporate & Admin
+This gross is then reconciled against funding sources:
 
-SR25 sets admin costs in nominal terms: £482m (25-26) → £474m → £466m → £458m (28-29). The model reads these nominal figures, deflates them to real prices, and then extrapolates the SR27 period at −2% real growth per year (reflecting continued admin pressure).
+```
+Gross = HO Core Grant + Precept + Other income
+```
 
-### 4.7 CDEL
+**Precept income** (council-tax raised by Police & Crime Commissioners) grows at `precept_nominal_growth` in nominal terms (default 5% p.a., roughly the council-tax cap plus base), then deflated back to real using the GDP deflator. **Other income** is a small bucket for specific grants, fees and reserves.
 
-CDEL is modelled as a single total, calibrated to match PESA 2025-26 plans (~£1.54bn real), and then distributed across areas using a fixed split (police ~32%, borders ~22%, admin ~18%, homeland security ~18%, with smaller shares elsewhere). A real growth parameter lets you grow or shrink the total year-on-year.
+The **HO Core Grant is the residual** — the amount the Home Office has to fund to keep the force whole. This is what feeds the Overview RDEL total, not gross police spending. When gross rises faster than precept + other, the HO grant has to grow; when precept growth outpaces gross, HO can give less.
+
+### 4.3 Borders & Migration — Border Force + UKVI net
+
+```
+RDEL = Border Force pay bill
+     + Border Force non-pay × passenger_volume_index
+     + UKVI gross RDEL − visa fee income
+```
+
+Each component has its own real growth rate: Border Force workforce growth, BF real pay growth, BF non-pay real growth, UKVI gross real growth, and fee income real growth. UKVI is substantially fee-funded, so the model shows the net figure.
+
+### 4.4 Border Security Command — phased SR25 uplift
+
+SR25 announced a phased uplift of +£280m RDEL per year by 2028-29 on top of a small 2025-26 baseline. The model interpolates from baseline to peak across the SR25 period (linear or backloaded profile), then holds flat in real terms through SR27.
+
+### 4.5 Homeland Security and Crime/Fire/Drugs — baselines × real growth
+
+Each is a real 2025-26 baseline compounded at its own real growth rate. The Crime/Fire/Drugs baseline (£450m default) reflects the fact that fire & rescue funding transferred to MHCLG in 2022 and so is no longer part of the Home Office budget — this leaves a visible step-change at the historic → projection boundary, which the continuity diagnostic flags.
+
+### 4.6 Corporate & Admin — SR25 nominal path + SR27 real growth
+
+SR25 sets admin costs in nominal £m (482 → 474 → 466 → 458 over 2025-26 to 2028-29). The model reads these nominal figures, deflates them to real, then extrapolates the SR27 period at the scenario's `corporate_admin_real_growth_sr27` (default −2% real p.a., reflecting continued admin pressure).
+
+### 4.7 CDEL — envelope anchored, SR27 growth-extrapolated
+
+Total CDEL is taken directly from the **published SR25 envelope** (nominal £m, deflated to real) for years where it exists, which runs through 2029-30. Beyond the envelope, CDEL grows from the last known envelope year at `cdel.sr27_real_growth`. The total is then split across areas by fixed shares (defaults aligned with the historic PESA profile: police 32%, borders 22%, homeland 18%, admin 18%, asylum 4%, crime/fire/drugs 4%, BSC 2%).
+
+This is an improvement on the earlier model, which used a single hardcoded total-CDEL number with 0% real growth and a different area split — that produced wild step changes at the boundary and a flat projection forever.
 
 ---
 
 ## 5. Real versus nominal terms
 
-Every driver calculation happens in **real** 2025-26 prices. After the projection is assembled, the model multiplies each year by the rebased GDP deflator to produce a **nominal** figure. This means:
+Every driver calculation happens in **real 2025-26 prices**. The model then multiplies each year by the rebased GDP deflator to produce nominal figures. Parameter changes (e.g. hotel cost per night, real pay award) are always interpreted as real-terms assumptions. The exception is `precept_nominal_growth`, which is expressed in nominal terms to match how council-tax cap policy is typically discussed; the model converts it to real internally.
 
-- Parameter changes (e.g. hotel cost per night) are always interpreted as real-terms assumptions. If you want to model a 2% real cost pressure on top of inflation, set the parameter accordingly.
-- Comparing real vs nominal side-by-side shows how much of headline growth is inflation versus genuine volume or price change.
-
-The deflator is rebased inside the model, so the HMT file does not need to be in 2025-26 base — the source file is in 2024-25 base and the model converts automatically.
+The deflator is rebased inside the model, so the HMT source file does not need to be in 2025-26 base — it is in 2024-25 base and the model converts automatically.
 
 ---
 
-## 6. Scenarios
+## 6. The envelope comparison
+
+A key output is the **envelope gap**: the difference between what the driver model projects and the HO budget envelope. On the Overview tab the envelope is built from:
+
+- **SR25 years (2025-26 to 2029-30)**: published SR25 envelope, deflated to real.
+- **SR27 years (2030-31)**: extrapolated from 2028-29 at a user-set SR27 real growth rate, which defaults to the SR25 implied CAGR on total DEL (currently around −0.24% p.a.).
+
+The model prints both the per-year gap and the cumulative gap across the projection horizon. A positive gap means the driver model projects more spending than the envelope allows — i.e. something has to give.
+
+---
+
+## 7. The continuity diagnostic
+
+Every projection starts from historic 2024-25 outturn and extends forward. If the driver assumptions and the historic shares are out of alignment the first projection year jumps unnaturally. The Overview tab includes a diagnostic table that reports the percentage step change in each area from 2024-25 outturn to 2025-26 model forecast, and flags any step with absolute value > 5%. The diagnostic is the cheapest way to tell whether the driver baseline is well-calibrated.
+
+Currently the flagged steps in the baseline are:
+- Corporate Admin +11% (known SR25 nominal path forces this).
+- Crime/Fire/Drugs −32% (genuine transfer of fire & rescue to MHCLG in 2022 — real discontinuity, not a bug).
+- CDEL (all areas) −10% (real SR25 total CDEL is below 2024-25 outturn; same percentage across all areas because they share the envelope).
+
+---
+
+## 8. Scenarios
 
 Scenarios are just a bundle of parameter overrides. The repo ships with four:
 
-- **baseline** — flat assumptions everywhere; calibrated so 2025-26 totals match PESA plans within ~£50m.
-- **high asylum** — 130,000 supported population (+20%), growing 3% per year, hotel share 32%.
-- **low asylum** — 85,000 supported population (−20%), falling 5% per year, hotel share down to 20%.
-- **police growth** — workforce growing 1% per year, real pay award of 1% per year.
+- **baseline** — arrivals 85k, decision capacity 140k, 45% initial grant / 45% appeal success, 12% withdrawals, dispersal capacity 75k, 1% real pay growth, 5% nominal precept growth. Calibrated so the hotel population just reaches zero by 2028-29.
+- **high asylum** — higher arrivals (110k) and lower throughput (130k capacity); supported population grows through the horizon, hotels persist.
+- **low asylum** — lower arrivals (55k) and stronger throughput (180k capacity); population drains quickly, hotels exit early.
+- **police growth** — +1% workforce p.a. and +1% real pay award on the baseline.
 
 You can build your own by constructing a `Scenario()` and editing any of its sub-objects (asylum, police, borders, bsc, other, cdel).
 
 ---
 
-## 7. The envelope comparison
-
-A key output is the **envelope gap**: the difference between what the driver model projects and what the SR25 settlement actually allocates. A positive gap means the bottom-up drivers are implying more spending than the top-down settlement allows — i.e. something has to give. In the baseline scenario the gap is near zero in 2025-26 (£47m undershoot, because the seed parameters are calibrated there), widens to −£988m in 2026-27 (SR25 tightens but the model assumes flat activity), and swings to +£332m in 2028-29. These gaps are the most interesting output of the model: they quantify where the implied savings or cost pressures sit.
-
----
-
-## 8. What the model does not do
+## 9. What the model does not do
 
 - It does not attempt to model the Home Office's AME (annually managed expenditure) — things like provisions and impairments which sit outside DEL control.
-- It does not capture the precept-funded portion of police spending; the police line only reflects HO-funded police DEL.
-- The historic series starts at 2020-21 because that is the window PESA 2025 gives on a consistent basis. Pre-2020 data would require parsing archived PESA releases.
-- The programme-level historic split is a proportional allocation, not direct outturn. This is a known limitation; the fix is to parse the HO Annual Report & Accounts for the Statement of Parliamentary Supply.
-- The seed driver parameters (pay rates, workforce sizes, UKVI fees) are indicative figures from published sources. For analytical rigour they should be replaced with values from the Home Office Main Estimates Memorandum.
+- The historic series starts at 2020-21 because that is the window PESA 2025 gives on a consistent basis.
+- The programme-level historic split is a proportional allocation of the PESA total, not direct outturn. The fix is to parse the HO Annual Report & Accounts for the Statement of Parliamentary Supply.
+- Police staff/PCSO pay is modelled as a single £2.6bn bucket rather than having its own workforce × pay calculation; the dashboard exposes it as a tunable number.
+- The seed driver parameters are indicative figures calibrated to 2024-25 outturn. They should be cross-checked against the Home Office Main Estimates Memorandum before use in analytical work.
 
 ---
 
-## 9. How to use the model
+## 10. How to use the model
 
-1. Open `notebooks/home_office_model.py` in Jupyter to interact with the baseline and scenarios.
-2. Or run `PYTHONPATH=src python -m home_office_model.render` to regenerate the charts and CSVs in `outputs/`.
-3. Edit `scenarios.py` to change driver assumptions, or build a new scenario in a notebook cell:
+The fastest way is the interactive dashboard — see [`dashboard_user_guide.md`](dashboard_user_guide.md).
 
-   ```python
-   from home_office_model.projections import run_projection
-   from home_office_model.scenarios import Scenario
+From code:
 
-   my_scenario = Scenario(name="my_test")
-   my_scenario.asylum.dispersal_capacity = 80_000
-   my_scenario.police.workforce_growth_per_year = 0.02
-   result = run_projection(my_scenario)
-   result.totals_real()
-   ```
+```python
+from home_office_model.projections import run_projection
+from home_office_model.scenarios import Scenario
 
-4. Compare against the SR25 envelope via `result.envelope_gap()`.
+my_scenario = Scenario(name="my_test")
+my_scenario.asylum.dispersal_capacity = 80_000
+my_scenario.police.workforce_growth_per_year = 0.01
+result = run_projection(my_scenario)
+
+print(result.totals_real())        # total RDEL + CDEL by year, real £m
+print(result.rdel_real)             # year × area RDEL matrix
+print(result.envelope_gap())        # gap vs SR25 envelope, nominal £m
+```
+
+To regenerate the static charts in `outputs/`:
+
+```bash
+PYTHONPATH=src python -m home_office_model.render
+```
+
+To open the notebook view:
+
+```bash
+jupyter lab notebooks/home_office_model.py
+```
