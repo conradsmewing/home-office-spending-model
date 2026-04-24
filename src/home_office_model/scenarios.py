@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Optional
 
 
 @dataclass
@@ -72,7 +73,7 @@ class PoliceParams:
     # Optional phase-in cap: if set (e.g. "2028-29"), workforce growth applies
     # through that financial year and then plateaus. Use this for "+N% over K
     # years then hold" policy scenarios. None = grow forever.
-    workforce_growth_end_year: str | None = None
+    workforce_growth_end_year: Optional[str] = None
     real_pay_award_per_year: float = 0.01    # 1% real pay award p.a. (baseline)
 
 
