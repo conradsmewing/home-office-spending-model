@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+.env
+.DS_Store
+.claude/
+outputs/*.png
+outputs/*.csv
+outputs/*.xlsx
+# Keep raw downloads out of git
+data/raw/*.xlsx
+data/raw/*.xls
+data/raw/*.ods
+data/raw/*.pdf
+# But keep documentation and seed CSVs
+!data/raw/DOWNLOADS.md
+!data/raw/*_seed.csv

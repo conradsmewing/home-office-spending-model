@@ -1,0 +1,22 @@
+year,deflator_index,source
+2010-11,79.7,seed (replace with HMT)
+2011-12,81.3,seed
+2012-13,82.8,seed
+2013-14,84.4,seed
+2014-15,85.8,seed
+2015-16,86.8,seed
+2016-17,88.4,seed
+2017-18,90.3,seed
+2018-19,92.2,seed
+2019-20,94.0,seed
+2020-21,100.3,seed (COVID distortion)
+2021-22,100.0,seed
+2022-23,105.9,seed
+2023-24,111.5,seed
+2024-25,114.6,seed
+2025-26,117.0,seed (base year = 100 after rebase)
+2026-27,119.3,seed (OBR forecast)
+2027-28,121.6,seed
+2028-29,123.9,seed
+2029-30,126.2,seed
+2030-31,128.6,seed
