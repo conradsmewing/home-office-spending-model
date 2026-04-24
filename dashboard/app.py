@@ -73,8 +73,16 @@ preset_map = {
     "police +10% over 3 years": police_plus_10pct_scenario(),
 }
 
-# Rebuild scenario whenever the preset changes
+# Rebuild scenario whenever the preset changes. Also clear all widget-state
+# keys so that sliders/number-inputs re-read their defaults from the new
+# scenario. Without this, Streamlit restores each widget's previous value
+# from session_state and writes it straight back into `scen`, silently
+# undoing the preset switch.
+PRESERVE_KEYS = {"_preset", "scen"}
 if st.session_state.get("_preset") != preset:
+    for key in list(st.session_state.keys()):
+        if key not in PRESERVE_KEYS:
+            del st.session_state[key]
     st.session_state["_preset"] = preset
     st.session_state["scen"] = preset_map[preset]
 
