@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import asdict
+from io import BytesIO
 from pathlib import Path
 
 import pandas as pd
@@ -1222,6 +1223,48 @@ with tabs[10]:
     st.dataframe(assumptions_df, width=W, hide_index=True)
 
     name = scen.name.replace(" ", "_")
+
+    # ---------- Excel workbook: one-click snapshot of the whole scenario -------
+    def build_excel_bytes() -> bytes:
+        """Assemble a multi-sheet xlsx with assumptions, totals, per-area matrices,
+        long-format results, and the asylum + police driver detail."""
+        buf = BytesIO()
+        with pd.ExcelWriter(buf, engine="openpyxl") as xw:
+            assumptions_df.to_excel(xw, sheet_name="Assumptions", index=False)
+            result.totals_real().round(1).to_excel(xw, sheet_name="Totals (real)")
+            result.totals_nominal().round(1).to_excel(xw, sheet_name="Totals (nominal)")
+            (result.rdel_real.rename(columns=AREA_LABELS).round(1)
+                .to_excel(xw, sheet_name="RDEL by area (real)"))
+            (result.rdel_nominal.rename(columns=AREA_LABELS).round(1)
+                .to_excel(xw, sheet_name="RDEL by area (nominal)"))
+            (result.cdel_real.rename(columns=AREA_LABELS).round(1)
+                .to_excel(xw, sheet_name="CDEL by area (real)"))
+            (result.cdel_nominal.rename(columns=AREA_LABELS).round(1)
+                .to_excel(xw, sheet_name="CDEL by area (nominal)"))
+            result.long.to_excel(xw, sheet_name="Long format", index=False)
+            if result.sr25_envelope_nominal is not None:
+                result.sr25_envelope_nominal.to_excel(xw, sheet_name="SR25 envelope (nominal)")
+            try:
+                asylum_trace = project_asylum_population(scen).round(1)
+                asylum_trace.to_excel(xw, sheet_name="Asylum population")
+            except Exception:
+                pass
+            try:
+                police_trace = project_police_funding(scen, deflator=result.deflator).round(1)
+                police_trace.to_excel(xw, sheet_name="Police funding")
+            except Exception:
+                pass
+        return buf.getvalue()
+
+    st.download_button(
+        "📥 Full Excel workbook (all sheets)",
+        data=build_excel_bytes(),
+        file_name=f"home_office_{name}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        type="primary",
+    )
+
+    st.markdown("**Individual CSVs**")
     st.download_button("Assumptions CSV",
                        assumptions_df.to_csv(index=False).encode("utf-8"),
                        f"home_office_{name}_assumptions.csv", "text/csv")
