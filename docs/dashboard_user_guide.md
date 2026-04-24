@@ -21,7 +21,7 @@ The app opens at <http://localhost:8501>.
 
 | Control | What it does |
 |---|---|
-| **Preset** | Resets all parameters to one of four bundled scenarios: `baseline`, `high asylum`, `low asylum`, `police growth`. Switching preset overwrites every control in every tab. |
+| **Preset** | Resets all parameters to one of four bundled scenarios: `baseline`, `high asylum inflows`, `high asylum grant rate`, `police +10% over 3 years`. Switching preset overwrites every control in every tab. |
 | **Units** | Toggles between **real 2025-26 £m** and **nominal £m** for all charts and tables that respect it. Real is best for comparisons across years; nominal is what appears in published documents. |
 
 All parameter changes in the tabs are applied live — each slider/input triggers a re-run of the projection.
@@ -45,7 +45,7 @@ The headline view: HO total spending (RDEL + CDEL) vs the budget envelope.
 
 ### Things to try
 - Move the SR27 slider and watch the gap bars for 2029-30 and 2030-31.
-- Switch preset to **high asylum** and see how the RDEL line drifts above the envelope.
+- Switch preset to **high asylum inflows** and see how the RDEL line drifts above the envelope.
 
 ---
 
@@ -171,7 +171,7 @@ Total CDEL comes from the published SR25 envelope; SR27 years extrapolate at the
 
 ## Tab 9 — Compare scenarios
 
-Runs the four bundled presets side-by-side and plots total DEL by year on a single chart. Useful for quickly seeing how, say, `high asylum` differs from `baseline`.
+Runs the four bundled presets side-by-side and plots total DEL by year on a single chart. Useful for quickly seeing how, say, `high asylum inflows` differs from `baseline`.
 
 ---
 

@@ -30,9 +30,9 @@ from home_office_model.drivers import project_asylum_population, project_police_
 from home_office_model.projections import compare_scenarios, run_projection
 from home_office_model.scenarios import (
     Scenario,
-    high_asylum_scenario,
-    low_asylum_scenario,
-    police_growth_scenario,
+    high_asylum_grant_rate_scenario,
+    high_asylum_inflows_scenario,
+    police_plus_10pct_scenario,
 )
 
 st.set_page_config(
@@ -63,14 +63,14 @@ def pct_slider(label: str, lo: float, hi: float, value: float,
 st.sidebar.title("Global settings")
 preset = st.sidebar.selectbox(
     "Start from preset",
-    ["baseline", "high asylum", "low asylum", "police growth"],
+    ["baseline", "high asylum inflows", "high asylum grant rate", "police +10% over 3 years"],
     help="Resets all driver assumptions to the preset's defaults.",
 )
 preset_map = {
     "baseline": Scenario(name="baseline"),
-    "high asylum": high_asylum_scenario(),
-    "low asylum": low_asylum_scenario(),
-    "police growth": police_growth_scenario(),
+    "high asylum inflows": high_asylum_inflows_scenario(),
+    "high asylum grant rate": high_asylum_grant_rate_scenario(),
+    "police +10% over 3 years": police_plus_10pct_scenario(),
 }
 
 # Rebuild scenario whenever the preset changes
@@ -1190,9 +1190,9 @@ with tabs[9]:
     )
     comp = compare_scenarios([
         Scenario(name="baseline"),
-        high_asylum_scenario(),
-        low_asylum_scenario(),
-        police_growth_scenario(),
+        high_asylum_inflows_scenario(),
+        high_asylum_grant_rate_scenario(),
+        police_plus_10pct_scenario(),
     ])
     pivot = comp.pivot_table(index="year", columns="scenario",
                              values="total_real", aggfunc="first")

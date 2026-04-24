@@ -13,9 +13,9 @@ from .config import AREA_LABELS, HISTORIC_YEARS, OUTPUTS, PROJECTION_YEARS, SR25
 from .projections import compare_scenarios, run_projection
 from .scenarios import (
     Scenario,
-    high_asylum_scenario,
-    low_asylum_scenario,
-    police_growth_scenario,
+    high_asylum_grant_rate_scenario,
+    high_asylum_inflows_scenario,
+    police_plus_10pct_scenario,
 )
 
 
@@ -198,9 +198,9 @@ def render_all() -> None:
     baseline = run_projection(Scenario(name="baseline"))
     scenarios = [
         Scenario(name="baseline"),
-        high_asylum_scenario(),
-        low_asylum_scenario(),
-        police_growth_scenario(),
+        high_asylum_inflows_scenario(),
+        high_asylum_grant_rate_scenario(),
+        police_plus_10pct_scenario(),
     ]
     comparison = compare_scenarios(scenarios)
 

@@ -38,9 +38,9 @@ from home_office_model.config import AREA_LABELS, HISTORIC_YEARS, PROJECTION_YEA
 from home_office_model.projections import run_projection, compare_scenarios
 from home_office_model.scenarios import (
     Scenario,
-    high_asylum_scenario,
-    low_asylum_scenario,
-    police_growth_scenario,
+    high_asylum_grant_rate_scenario,
+    high_asylum_inflows_scenario,
+    police_plus_10pct_scenario,
 )
 
 pd.set_option("display.float_format", "{:,.0f}".format)
@@ -89,17 +89,17 @@ shares.round(1)
 # %% [markdown]
 # ## Scenario comparison
 #
-# - **baseline** — SR25 as announced + flat driver assumptions
-# - **high_asylum** — +20% supported population growing 3% p.a., slower hotel exit
-# - **low_asylum** — -20% supported population, hotel share drops to 20%
-# - **police_growth** — +1% workforce p.a., +1% real pay award
+# - **baseline** — calibrated to continue from 2024-25 outturn; hotels exit by 2028-29
+# - **high_asylum_inflows** — arrivals surge to 130k/yr; appeal backlog builds
+# - **high_asylum_grant_rate** — initial grant rate lifted to 70% (cohort-surge pattern)
+# - **police_plus_10pct** — police workforce +10% phased over 3 years then plateaus
 
 # %%
 scenarios = [
     Scenario(name="baseline"),
-    high_asylum_scenario(),
-    low_asylum_scenario(),
-    police_growth_scenario(),
+    high_asylum_inflows_scenario(),
+    high_asylum_grant_rate_scenario(),
+    police_plus_10pct_scenario(),
 ]
 comparison = compare_scenarios(scenarios)
 pivot = comparison.pivot_table(

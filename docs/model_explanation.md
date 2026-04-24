@@ -158,11 +158,11 @@ Currently the flagged steps in the baseline are:
 Scenarios are just a bundle of parameter overrides. The repo ships with four:
 
 - **baseline** — arrivals 85k, decision capacity 140k, 45% initial grant / 45% appeal success, 12% withdrawals, dispersal capacity 75k, 1% real pay growth, 5% nominal precept growth. Calibrated so the hotel population just reaches zero by 2028-29.
-- **high asylum** — higher arrivals (110k) and lower throughput (130k capacity); supported population grows through the horizon, hotels persist.
-- **low asylum** — lower arrivals (55k) and stronger throughput (180k capacity); population drains quickly, hotels exit early.
-- **police growth** — +1% workforce p.a. and +1% real pay award on the baseline.
+- **high asylum inflows** — arrivals surge to 130k/yr; all other levers at baseline. The appeal pool backlog builds and hotel population climbs rather than exits — the classic demand-shock stress test.
+- **high asylum grant rate** — initial grant rate lifted from 45% to 70% (Syrian/Afghan-style cohort surge), arrivals and capacity at baseline. Fewer cases flow to appeal, so the population drains faster and hotels empty within a year.
+- **police +10% over 3 years** — workforce grows from 148,000 to 162,800 FTE by the end of 2028-29 (three years of ~3.23% compounding) and then plateaus. HO Core Grant rises by ~£700m real over SR25 before precept growth starts to catch up.
 
-You can build your own by constructing a `Scenario()` and editing any of its sub-objects (asylum, police, borders, bsc, other, cdel).
+You can build your own by constructing a `Scenario()` and editing any of its sub-objects (asylum, police, borders, bsc, other, cdel). The phase-in cap on workforce growth uses `police.workforce_growth_end_year = "2028-29"` in combination with a positive `workforce_growth_per_year` — growth applies through that FY and then plateaus.
 
 ---
 

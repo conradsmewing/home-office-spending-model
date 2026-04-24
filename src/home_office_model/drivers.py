@@ -207,9 +207,17 @@ def project_police_funding(
     )
     precept_real = real_from_nominal(precept_nominal, deflator)
 
+    # If a workforce growth end year is set, cap the effective growth horizon.
+    base_int = int(BASE_YEAR[:4])
+    if p.workforce_growth_end_year is not None:
+        end_offset = int(p.workforce_growth_end_year[:4]) - base_int
+    else:
+        end_offset = None
+
     rows = []
     for yr, t in zip(years, offsets):
-        workforce = p.workforce_fte * (1 + p.workforce_growth_per_year) ** t
+        t_work = min(t, end_offset) if end_offset is not None else t
+        workforce = p.workforce_fte * (1 + p.workforce_growth_per_year) ** t_work
         pay = p.avg_pay_per_fte * (1 + p.real_pay_award_per_year) ** t
         officer_pay = workforce * pay * p.on_costs_multiplier / 1e6
         staff_pay = p.staff_pay_gross * (1 + p.staff_pay_real_growth) ** t

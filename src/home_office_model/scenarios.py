@@ -67,6 +67,10 @@ class PoliceParams:
     other_income_real_growth: float = 0.0
     # Year-on-year assumptions
     workforce_growth_per_year: float = 0.0
+    # Optional phase-in cap: if set (e.g. "2028-29"), workforce growth applies
+    # through that financial year and then plateaus. Use this for "+N% over K
+    # years then hold" policy scenarios. None = grow forever.
+    workforce_growth_end_year: str | None = None
     real_pay_award_per_year: float = 0.01    # 1% real pay award p.a. (baseline)
 
 
@@ -150,28 +154,30 @@ class Scenario:
     cdel: CDELParams = field(default_factory=CDELParams)
 
 
-def high_asylum_scenario() -> Scenario:
-    s = Scenario(name="high_asylum", description="Higher arrivals, constrained decision capacity — growing supported population, more hotels")
-    s.asylum.awaiting_determination_start = 110_000
-    s.asylum.on_appeal_start = 20_000
-    s.asylum.new_arrivals_per_year = 110_000
-    s.asylum.total_decisions_capacity = 130_000     # capacity squeezed
-    s.asylum.withdrawal_rate = 0.08                 # fewer withdrawals under stress
+def high_asylum_inflows_scenario() -> Scenario:
+    s = Scenario(
+        name="high_asylum_inflows",
+        description="Arrivals surge to 130k/yr; decision capacity, grant rate and other levers unchanged. Shows the pool backlog building under a demand shock.",
+    )
+    s.asylum.new_arrivals_per_year = 130_000
     return s
 
 
-def low_asylum_scenario() -> Scenario:
-    s = Scenario(name="low_asylum", description="Lower arrivals, strong decision capacity — declining supported population, hotel exit")
-    s.asylum.awaiting_determination_start = 70_000
-    s.asylum.on_appeal_start = 15_000
-    s.asylum.new_arrivals_per_year = 55_000
-    s.asylum.total_decisions_capacity = 180_000     # surge capacity
-    s.asylum.withdrawal_rate = 0.15
+def high_asylum_grant_rate_scenario() -> Scenario:
+    s = Scenario(
+        name="high_asylum_grant_rate",
+        description="Initial grant rate lifted to 70% (reflects a Syrian/Afghan-style grant cohort). Arrivals and capacity unchanged; fewer cases flow to appeal.",
+    )
+    s.asylum.initial_grant_rate = 0.70
     return s
 
 
-def police_growth_scenario() -> Scenario:
-    s = Scenario(name="police_growth", description="+1% workforce p.a., 1% real pay award")
-    s.police.workforce_growth_per_year = 0.01
-    s.police.real_pay_award_per_year = 0.01
+def police_plus_10pct_scenario() -> Scenario:
+    s = Scenario(
+        name="police_plus_10pct",
+        description="Police workforce +10% over 3 years then plateau (target ~162,800 FTE by end of 2028-29).",
+    )
+    # (1.10)^(1/3) − 1 ≈ 3.2280%, so 3 years of compounding delivers +10%.
+    s.police.workforce_growth_per_year = 0.032280
+    s.police.workforce_growth_end_year = "2028-29"
     return s

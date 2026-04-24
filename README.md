@@ -87,9 +87,9 @@ The model splits Home Office spending into seven programme areas:
 
 Four presets ship in the model:
 - **baseline** — calibrated to continue from 2024-25 outturn with hotels exiting by 2028-29.
-- **high asylum** — higher arrivals, tighter decision capacity, persistent hotels.
-- **low asylum** — lower arrivals, stronger throughput, fast hotel exit.
-- **police growth** — +1% workforce p.a. and +1% real pay award.
+- **high asylum inflows** — arrivals surge to 130k/yr; appeal backlog builds, hotels stay in use.
+- **high asylum grant rate** — initial grant rate raised to 70% (cohort-surge pattern); population drains fast, hotels empty early.
+- **police +10% over 3 years** — police workforce phased up by 10% over three years, then plateaus.
 
 Build your own by constructing a `Scenario()` and overriding parameters:
 
